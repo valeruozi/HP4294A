@@ -1,5 +1,6 @@
 
 import visa
+import numpy as np
 
 
 class HP4294A:
@@ -12,18 +13,18 @@ class HP4294A:
         self.myinst.read_termination = '\n'
         self.myinst.write_termination = '\n'
         '''Get and display the device IDN'''
-        self.idn = myinst.query("*IDN?") 
-        print ("Device IDN: ", self.idn)
+        self.Idn = self.myinst.query("*IDN?") 
+        print ("Device IDN: ", self.Idn)
         '''Clear status and load the default setup'''
         self.myinst.write("*CLS")
         self.myinst.write("*RST")
         '''Set the ASCII format as the data transfer format'''
         self.myinst.write("FORM4") 
 
-    def check_errors(self): #DA SISTEMARE I DATI PRINTATI
+    def check_errors(self):
         '''Reads out the oldest error among errors stored in the error queue of the 4294A. The size of the error queue is 10'''
-        self.errors = self.myinst.query("OUTPERRO?")
-        print ("Errors: ", self.errors)
+        self.Errors = self.myinst.query("OUTPERRO?")
+        print ("Errors: ", self.Errors)
 #    
     def trigger(self,trig,numbert):
         self.trig = trig
@@ -49,25 +50,27 @@ class HP4294A:
         self.myinst.write("HOLD")
         pass
    
-    def calibration(self,cal): #STUDIARE STRUMENTI CALIBRAZIONE
-                               #STUDIARE SALVATAGGIO DATI CALIBRAZIONE
-        if cal == "open":
-            self.myinst.write("CALA")
-        elif cal == "short":
-            self.myinst.write("CALB")
-        elif cal == "load":
-            self.myinst.write("CALC")
-        pass
-    def calibration_adapter(self,cal): #STUDIARE STRUMENTI CALIBRAZIONE
-                               #STUDIARE SALVATAGGIO DATI CALIBRAZIONE
-        if cal == "phase":
-            self.myinst.write("ECALP")
-        elif cal == "open":
-            self.myinst.write("ECALA")
-        elif cal == "short":
-            self.myinst.write("ECALB")
-        elif cal == "load":
-            self.myinst.write("ECALC")
+    def calibration(self,cal):
+        
+        '''Selects the adapter in the adapter setting'''
+        adapter = myinst.query("E4TP?")
+        
+        if adapter == 'NONE':
+            if cal == "open":
+                self.myinst.write("CALA")
+            elif cal == "short":
+                self.myinst.write("CALB")
+            elif cal == "load":
+                self.myinst.write("CALC")
+        elif adapter == 'M2': #Adapter 16494F
+            if cal == "phase":
+                self.myinst.write("ECALP")
+            elif cal == "load":
+                self.myinst.write("ECALC")
+#            elif cal == "open":          #Not needed for adapter M2
+#                self.myinst.write("ECALA")
+#            elif cal == "short":
+#                self.myinst.write("ECALB")
         pass
  
     def get_measure(self,sweep,number_type):
@@ -108,35 +111,42 @@ class HP4294A:
         self.myinst.write("SWPP FREQ")
         
         '''Sets the active trace.'''
+        self.myinst.write("TRAC A")
+        
+        '''Start of the sweep'''
+        self.myinst.write("SING")
+        
+        '''Reads out the values of all measurement points in a data trace array (refer to “Internal data arrays” on page 81). (Query only)'''
+        self.Values = self.myinst.query("OUTPDTRC?")
+        self.Measure1 = eval(self.Values)
+        self.Measure2 = [str(x) for x in self.Measure1]
+        self.Measure3= np.array(self.Measure2)
+        
+        self.A = self.Measure3[0:200:2]
+#        self.A = self.A.tolist()
+        
+        '''Sets the active trace.'''
         self.myinst.write("TRAC B")
         
         '''Start of the sweep'''
         self.myinst.write("SING")
         
-        '''Reads out 1 when the execution of all overlap commands'''
-        self.myinst.query("*OPC?")
-        print ("Sweep ended")
-        
-        ''' Copies the measured data into the memory array. It is copied to both the A And B traces'''
-#        self.myinst.write("DATAMEM")
-        
         '''Reads out the values of all measurement points in a data trace array (refer to “Internal data arrays” on page 81). (Query only)'''
-        values = self.myinst.query("OUTPDTRC?")
-        y = values.strip().split(",")
-#        for i in range(0,len(y)):
-#            print ("Result: ", y[i])
-        c = []
-        d = []
-        for i in range(0,len(y)-1,2):
-            c.append(y[i])
-            d.append(y[i+1])
-        measuref = Measure(c,d)
-        return measuref
+        self.Values = self.myinst.query("OUTPDTRC?")
+        self.Measure1 = eval(self.Values)
+        self.Measure2 = [str(x) for x in self.Measure1]
+        self.Measure3= np.array(self.Measure2)
         
+        self.B = self.Measure3[0:200:2]
+#        self.B = self.B.tolist()
+        
+        self.measuref = Measure(self.A,self.B)
+        return self.measuref
+    
 class Measure: 
     def __init__(self,A,B):
-        self.a = A
-        self.b = B
+        self.A = A
+        self.B = B
 
 class Sweep: 
     def __init__(self,a,b,npoints,sweep_type,scale_type): #Unit Hz
@@ -157,13 +167,11 @@ myinst = rm.get_instrument("GPIB0::17::INSTR")  #addr of the instrument, found o
 impAnalyzer = HP4294A(myinst)
 impAnalyzer.inizialize()
 impAnalyzer.check_errors()
-adapter = myinst.query("E4TP?") #M2
-print ("Adapter: ",adapter)
-#impAnalyzer.hold()
-impAnalyzer.calibration_adapter('load')
+impAnalyzer.calibration('load')
+#load = myinst.query("OUTPCOMC3?")
 impAnalyzer.check_errors()
-#impAnalyzer.trigger('internal','single')
-#sweep1 = Sweep('10HZ','20HZ',10,'start_stop','log')
-#measure1 = impAnalyzer.get_measure(sweep1,'absolute')
-#impAnalyzer.check_errors()
-#e = [measure1.a, measure1.b]
+impAnalyzer.trigger('internal','single')
+sweep1 = Sweep('40HZ','1MHZ',100,'start_stop','log')
+measure1 = impAnalyzer.get_measure(sweep1,'amplitude')
+impAnalyzer.check_errors()
+Results = [measure1.A, measure1.B]
