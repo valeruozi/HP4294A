@@ -1,6 +1,7 @@
 
 import visa
 import numpy as np
+import matplotlib.pyplot as plt
 
 
 class HP4294A:
@@ -62,6 +63,7 @@ class HP4294A:
                 self.myinst.write("CALB")
             elif cal == "load":
                 self.myinst.write("CALC")
+                
         elif adapter == 'M2': #Adapter 16494F
             if cal == "phase":
                 self.myinst.write("ECALP")
@@ -163,6 +165,7 @@ rm = visa.ResourceManager()
 resources = rm.list_resources()
 print ("Resources avaiable: ", resources)
 #gpib_adress = raw_input("Type the choosen resource name: ") #"GPIB:17::INSTR"
+#myinst = rm.get_instrument(gpib_adress)
 myinst = rm.get_instrument("GPIB0::17::INSTR")  #addr of the instrument, found on visa's resources
 impAnalyzer = HP4294A(myinst)
 impAnalyzer.inizialize()
@@ -175,3 +178,17 @@ sweep1 = Sweep('40HZ','1MHZ',100,'start_stop','log')
 measure1 = impAnalyzer.get_measure(sweep1,'amplitude')
 impAnalyzer.check_errors()
 Results = [measure1.A, measure1.B]
+
+'''Results plot'''
+freq = np.linspace(40,1000000,100)
+
+plt.figure(1)
+plt.subplot(211)
+plt.plot(freq,Results[0])
+plt.ylabel('Results[0]')
+plt.show()
+
+plt.subplot(212)
+plt.plot(freq,Results[1])
+plt.ylabel('Results[1]')
+plt.show()
